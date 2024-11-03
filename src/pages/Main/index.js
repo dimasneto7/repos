@@ -1,17 +1,33 @@
-import React, { useState, useCallback } from 'react'
-import { Container, Form, SubmitButton } from './styles'
-import { FaGithub, FaPlus } from 'react-icons/fa'
+import React, { useState, useCallback, useEffect } from 'react'
+import { Container, Form, SubmitButton, List, DeleteButton } from './styles'
+import { FaGithub, FaPlus, FaSpinner, FaBars, FaTrash } from 'react-icons/fa'
 import api from '../../service/api'
+import { Link } from 'react-router-dom'
 
 export default function Main() {
   const [newRepo, setNewRepo] = useState('')
-  const [repositorios, setRepositorios] = useState([])
+  const [repositorios, setRepositorios] = useState(() => {
+    const repoStorage = localStorage.getItem('repos')
+    return repoStorage ? JSON.parse(repoStorage) : []
+  })
+  const [loading, setLoading] = useState(false)
+  const [alert, setAlert] = useState(null)
 
-  function handleInputChange(e) {
-    setNewRepo(e.target.value)
-  }
+  // Buscar
+  useEffect(() => {
+    const repoStorage = localStorage.getItem('repos')
 
-  // async function hadleSubmit(e) {
+    if (repoStorage) {
+      setRepositorios(JSON.parse(repoStorage))
+    }
+  }, [])
+
+  // Salvar alterações
+  useEffect(() => {
+    localStorage.setItem('repos', JSON.stringify(repositorios))
+  }, [repositorios])
+
+  // async function handleSubmit(e) {
   //   e.preventDefault()
 
   //   const response = await api.get(`repos/${newRepo}`)
@@ -25,25 +41,55 @@ export default function Main() {
   //   console.log(repositorios)
   // }
 
+  function handleInputChange(e) {
+    setNewRepo(e.target.value)
+    setAlert(null)
+  }
+
   const handleSubmit = useCallback(
     (e) => {
       e.preventDefault()
+      setLoading(true)
+      setAlert(null)
 
       async function submit() {
-        const response = await api.get(`repos/${newRepo}`)
+        try {
+          if (newRepo === '') {
+            throw new Error('Você precisa indicar um repositório')
+          }
 
-        const data = {
-          name: response.data.full_name,
+          const response = await api.get(`repos/${newRepo}`)
+
+          const hasRepo = repositorios.find((repo) => repo.name === newRepo)
+
+          if (hasRepo) {
+            throw new Error('Repositótio duplicado')
+          }
+
+          const data = {
+            name: response.data.full_name,
+          }
+
+          setRepositorios([...repositorios, data])
+          setNewRepo('')
+        } catch (error) {
+          setAlert(true)
+          console.log(error)
+        } finally {
+          setLoading(false)
         }
-
-        setRepositorios([...repositorios, data])
-        setNewRepo('')
       }
-      console.log(repositorios)
-
       submit()
     },
     [newRepo, repositorios]
+  )
+
+  const handleDelete = useCallback(
+    (repo) => {
+      const find = repositorios.filter((r) => r.name !== repo)
+      setRepositorios(find)
+    },
+    [repositorios]
   )
 
   return (
@@ -53,7 +99,7 @@ export default function Main() {
         Meus Repositórios
       </h1>
 
-      <Form onSubmit={handleSubmit}>
+      <Form onSubmit={handleSubmit} error={alert}>
         <input
           type="text"
           placeholder="Adicionar Repositórios"
@@ -61,10 +107,30 @@ export default function Main() {
           onChange={handleInputChange}
         />
 
-        <SubmitButton>
-          <FaPlus color="#fff" size={14} />
+        <SubmitButton loading={loading ? 1 : 0}>
+          {loading ? (
+            <FaSpinner color="#fff" size={14} />
+          ) : (
+            <FaPlus color="#fff" size={14} />
+          )}
         </SubmitButton>
       </Form>
+
+      <List>
+        {repositorios.map((repo) => (
+          <li key={repo.name}>
+            <span>
+              <DeleteButton onClick={() => handleDelete(repo.name)}>
+                <FaTrash size={14} />
+              </DeleteButton>
+              {repo.name}
+            </span>
+            <Link to={`/repositorio/${encodeURIComponent(repo.name)}`}>
+              <FaBars size={20} />
+            </Link>
+          </li>
+        ))}
+      </List>
     </Container>
   )
 }
